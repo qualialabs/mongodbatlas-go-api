@@ -2,13 +2,18 @@ package mongodbatlas
 
 import (
   // auth "github.com/abbot/go-http-auth"
+  // dac "github.com/xinsnake/go-http-digest-auth-client"
+  // digest "github.com/bobziuchkovski/digest"
   "net/http"
   "log"
+  "os/exec"
+  "fmt"
+
   // "encoding/json"
   // "fmt"
-  "bytes"
+  // "bytes"
   // "time"
-  "io/ioutil"
+  // "io/ioutil"
   // "strings"
   // "errors"
 
@@ -50,122 +55,125 @@ type MongodbUser struct{
   DatabaseName string `json:"databasename,omitempty"`
 }
 
-
 // #############################
 
-func (client *Client) CreateMongodbUser(mongodbuser *MongodbUser) error {
 
-  url := client.URL + "/groups/" + client.AtlasGroupId + "/databaseUsers"
-  log.Println("[DEBUG] URL:>", url)
+
+
+// this just create useer with readwirte role for db and read role for oplog
+func (client *Client) CreateMongodbUser(mongodbuser *MongodbUser) error {
   db_user := mongodbuser.Username
   db_password := mongodbuser.Password
   db_name := mongodbuser.DatabaseName
 
-  jsonStr := []byte(`{ "databaseName" : "admin", "roles" : [ {"databaseName" : "`+ db_name +`", "roleName" : "readWrite"}, { "databaseName" : "local", "roleName" : "read"} ],"username": "`+ db_user +`", "password":"`+ db_password + `"}`)
+  url := client.URL + "/groups/" + client.AtlasGroupId + "/databaseUsers"
+  log.Println("[DEBUG] URL:", url)
 
-  req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
+  cmd := `curl -i -u "` + client.AtlasUsername+ `:`+client.AtlasApiKey +`" --digest -H "Content-Type: application/json" -X POST "`+ url +`" --data '
+ {
+   "databaseName" : "admin",
+   "roles" : [ {
+     "databaseName" : "` + db_name + `",
+     "roleName" : "readWrite"
+   }, {
+     "databaseName" : "local",
+     "roleName" : "read"
+   } ],
+   "username" : "` + db_user + `",
+   "password" : "` + db_password + `"
+ }'`
+
+  out, err := exec.Command("sh","-c",cmd).Output()
   if err != nil {
-    return err
+    return err    
+  }else {
+    fmt.Printf("The response is %s\n", out)
+    return nil
   }
-  req.Header.Set("Content-Type", "application/json")
-  req.SetBasicAuth("username", "apiKey")
-  
-  resp, err := client.HttpClient.Do(req)
 
+}
+
+func (client *Client) ReadMongodbUser(mongodbuser *MongodbUser) error {
+
+  db_user := mongodbuser.Username
+  // db_password := mongodbuser.Password
+  // db_name := mongodbuser.DatabaseName
+  
+  url := client.URL + "/groups/" + client.AtlasGroupId + "/databaseUsers/admin/" + db_user
+  log.Println("[DEBUG] URL:", url)
+
+
+  cmd := `curl -i -u "` + client.AtlasUsername+ `:`+client.AtlasApiKey +`" --digest "`+ url +`"`
+
+
+
+  out, err := exec.Command("sh","-c",cmd).Output()
   if err != nil {
-    return err
-  } else {
-    body, _ := ioutil.ReadAll(resp.Body)
-    log.Println("[DEBUG] Get response from Atlas response: ", string(body))
-    return nil 
+    return err    
+  }else {
+    fmt.Printf("The response is %s\n", out)
+    return nil
+  }
+
+  // # TODO: 
+  // ## need to handle the result 
+  // if !ok {
+  //   d.SetId("")
+  //   return nil
+  // }
+
+  // d.Set("address", obj.Address)
+  // return nil
+}
+
+func (client *Client) UpdateMongodbUser(mongodbuser *MongodbUser) error {
+  db_user := mongodbuser.Username
+  db_password := mongodbuser.Password
+  db_name := mongodbuser.DatabaseName
+  
+  url := client.URL + "/groups/" + client.AtlasGroupId + "/databaseUsers/admin/" + db_user
+  log.Println("[DEBUG] URL:", url)
+
+
+  cmd := `curl -i -u "` + client.AtlasUsername+ `:`+client.AtlasApiKey +`" --digest -H "Content-Type: application/json" -X PATCH "`+ url +`" --data '
+ {
+   "roles" : [ {
+     "databaseName" : "` + db_name + `",
+     "roleName" : "readWrite"
+   }, {
+     "databaseName" : "local",
+     "roleName" : "read"
+   } ],
+   "password" : "` + db_password + `"
+ }'`
+
+  out, err := exec.Command("sh","-c",cmd).Output()
+  if err != nil {
+    return err    
+  }else {
+    fmt.Printf("The response is %s\n", out)
+    return nil
   }
 }
 
-// ############ the api not work #############
-// func (client *Client) ReadMongodbUser(mongodb *Mongodb, user *User) error {
+func (client *Client) DeleteMongodbUser(mongodbuser *MongodbUser) error {
+  db_user := mongodbuser.Username
+  // db_password := mongodbuser.Password
+  // db_name := mongodbuser.DatabaseName
 
-//   url := client.URL + "/deployments/" + mongodb.Account + "/" + mongodb.Deployment + "/mongodb/" + mongodb.Name + "/users"
-//   log.Println("[DEBUG] URL:>", url)
-//   req, err := http.NewRequest("GET", url, nil)
-//   if err != nil {
-//     return err
-//   }
-//   req.Header.Set("Content-Type", "application/json")
-//   req.Header.Set("Accept-Version", "2014-06")
-//   req.Header.Set("Authorization", "Bearer " + client.ComposeioToken)
+  url := client.URL + "/groups/" + client.AtlasGroupId + "/databaseUsers/admin/" + db_user
+  log.Println("[DEBUG] URL:", url)
 
-//   resp, err := client.HttpClient.Do(req)
+  cmd := `curl -i -u "` + client.AtlasUsername+ `:`+client.AtlasApiKey +`" --digest -X DELETE "`+ url +`"`
 
-//   if err != nil {
-//     return err
-//   } else {
-//     body, _ := ioutil.ReadAll(resp.Body)
-//     log.Println("[DEBUG] Get response from Atlas response: ", string(body))
-//     if !strings.Contains(string(body), user.Username) {
-//       // err := "error"
-//       log.Println("[DEBUG] "+  user.Username + " not found ")
-//       return errors.New(user.Username + " not found")
-//     } else {
-//       return nil       
-//     }
-//   }
-
-// }
-
-// func (client *Client) UpdateMongodbUser(mongodbuser *MongodbUser) error {
-
-  // url := client.URL + "/deployments/" + mongodb.Account + "/" + mongodb.Deployment + "/mongodb/" + mongodb.Name + "/users/" + user.Username
-  // log.Println("[DEBUG] URL:>", url)
-
-  // password := user.Password
-  // var readOnly = "false"
-  // if user.ReadOnly {
-  //   readOnly = "true"
-  // } 
-  // jsonStr := []byte(`{"password":"`+ password + `", "readOnly":`+ readOnly + `}`)
-  // req, err := http.NewRequest("PUT", url, bytes.NewBuffer(jsonStr))
-  // if err != nil {
-  //   return err
-  // }
-  // req.Header.Set("Content-Type", "application/json")
-  // req.Header.Set("Accept-Version", "2014-06")
-  // req.Header.Set("Authorization", "Bearer " + client.ComposeioToken)
-
-  
-  // resp, err := client.HttpClient.Do(req)
-
-  // if err != nil {
-  //   return err
-  // } else {
-  //   body, _ := ioutil.ReadAll(resp.Body)
-  //   log.Println("[DEBUG] Get response from Atlas response: ", string(body))
-  //   return nil 
-  // }
-// }
-
-// func (client *Client) DeleteMongodbUser(mongodbuser *MongodbUser) error {
-
-  // url := client.URL + "/deployments/" + mongodb.Account + "/" + mongodb.Deployment + "/mongodb/" + mongodb.Name + "/users/" + user.Username
-  // log.Println("[DEBUG] URL:>", url)
-  // req, err := http.NewRequest("DELETE", url, nil )
-  // if err != nil {
-  //   return err
-  // }
-  // req.Header.Set("Content-Type", "application/json")
-  // req.Header.Set("Accept-Version", "2014-06")
-  // req.Header.Set("Authorization", "Bearer " + client.ComposeioToken)
-
-  
-  // resp, err := client.HttpClient.Do(req)
-
-  // if err != nil {
-  //   return err
-  // } else {
-  //   body, _ := ioutil.ReadAll(resp.Body)
-  //   log.Println("[DEBUG] Get response from Atlas response: ", string(body))
-  //   return nil 
-  // }
-// }
+  out, err := exec.Command("sh","-c",cmd).Output()
+  if err != nil {
+    return err    
+  }else {
+    fmt.Printf("The response is %s\n", out)
+    return nil
+  }
+}
 
 
 
